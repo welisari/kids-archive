@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kids Offline Portfolio & Timeline Archive</title>
+    <title>Kids Online Portfolio & Timeline Archive</title>
 
     <style>
         :root {
@@ -210,7 +210,6 @@
         .timeline-title { font-size: 1.2rem; margin-bottom: 0.3rem; }
         .timeline-desc { color: #475569; font-size: 0.95rem; margin-bottom: 1rem; }
 
-        /* Compact Media Container */
         .media-container {
             margin-top: 0.75rem;
             border-radius: 8px;
@@ -271,7 +270,6 @@
 
         .empty-msg { text-align: center; color: var(--text-muted); padding: 3rem 0; font-style: italic; }
 
-        /* Backup Controls Bar at Bottom */
         footer.backup-footer {
             margin-top: 3rem;
             padding-top: 1.5rem;
@@ -317,7 +315,6 @@
             border-color: #94a3b8;
         }
 
-        /* Lightbox Overlay */
         .lightbox-modal {
             display: none;
             position: fixed;
@@ -361,24 +358,24 @@
     <div class="container">
         <header>
             <h1>Family Digital Archive</h1>
-            <p style="color: var(--text-muted)">Private, local, offline milestones & portfolios</p>
+            <p style="color: var(--text-muted)">Cloud Synced Timeline & Portfolios</p>
         </header>
 
         <div class="child-selector">
             <div class="child-card active" id="tab-Yusuf" onclick="selectChild('Yusuf Servan')">
-                <img src="kids/assets/yusuf_servan_assets/avatar.jpg" onerror="this.src='https://ui-avatars.com/api/?name=Yusuf+Servan&background=2563eb&color=fff'" class="user-avatar" alt="Yusuf Servan">
+                <img src="https://ui-avatars.com/api/?name=Yusuf+Servan&background=2563eb&color=fff" class="user-avatar" alt="Yusuf Servan">
                 <span>Yusuf Servan</span>
             </div>
             
             <div class="child-card" id="tab-Arya" onclick="selectChild('Arya')">
-                <img src="kids/assets/arya_assets/avatar.jpg" onerror="this.src='https://ui-avatars.com/api/?name=Arya&background=8b5cf6&color=fff'" class="user-avatar" alt="Arya">
+                <img src="https://ui-avatars.com/api/?name=Arya&background=8b5cf6&color=fff" class="user-avatar" alt="Arya">
                 <span>Arya</span>
             </div>
         </div>
 
         <div class="card" id="formCard">
             <h2 id="form-heading">Add Entry for Yusuf Servan</h2>
-            <form id="entryForm" onsubmit="saveEntry(event)">
+            <form id="entryForm">
                 <input type="hidden" id="editEntryId" value="">
 
                 <div class="form-grid">
@@ -432,7 +429,6 @@
 
         <div id="timelineContainer" class="timeline"></div>
 
-        <!-- Backup & Data Controls at Bottom -->
         <footer class="backup-footer">
             <div class="backup-bar">
                 <span>💾 Data Backup & Restore</span>
@@ -445,93 +441,126 @@
         </footer>
     </div>
 
-    <!-- LIGHTBOX FULLSCREEN MODAL -->
     <div id="lightboxModal" class="lightbox-modal" onclick="closeLightbox(event)">
         <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
         <div id="lightboxBody"></div>
     </div>
 
-    <script>
+    <!-- Firebase SDK Modular Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            updateDoc, 
+            deleteDoc, 
+            doc, 
+            onSnapshot, 
+            query, 
+            orderBy 
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Firebase Configuration - Replace with your project details
+        const firebaseConfig = {
+            apiKey: "1:51381088229:web:891750c2eb48840291c90c",
+            authDomain: "myfamilyarchive-504eb.firebaseapp.com",
+            projectId: "myfamilyarchive-504eb",
+            storageBucket: "myfamilyarchive-504eb.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "1:51381088229:web:891750c2eb48840291c90c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const entriesCollection = collection(db, "entries");
+
         let currentChild = 'Yusuf Servan';
-        let entries = JSON.parse(localStorage.getItem('familyArchiveData')) || [];
+        let entries = [];
 
         document.getElementById('eventDate').value = new Date().toISOString().split('T')[0];
 
-        function selectChild(name) {
+        // Real-time Cloud Sync Listener
+        const q = query(entriesCollection, orderBy("eventDate", "desc"));
+        onSnapshot(q, (snapshot) => {
+            entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderTimeline();
+        });
+
+        window.selectChild = function(name) {
             currentChild = name;
-            
             document.querySelectorAll('.child-card').forEach(card => card.classList.remove('active'));
             if (name === 'Yusuf Servan') {
                 document.getElementById('tab-Yusuf').classList.add('active');
             } else {
                 document.getElementById('tab-Arya').classList.add('active');
             }
-
             resetForm();
             renderTimeline();
-        }
+        };
 
-        /* BACKUP & RESTORE FUNCTIONS */
-        function exportBackup() {
-            if (entries.length === 0) {
-                alert("No entries to export yet!");
-                return;
-            }
+        window.resetForm = function() {
+            document.getElementById('entryForm').reset();
+            document.getElementById('editEntryId').value = '';
+            document.getElementById('eventDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('form-heading').innerText = `Add Entry for ${currentChild}`;
+            document.getElementById('btnSubmit').innerText = 'Save Entry to Timeline';
+            document.getElementById('btnCancel').style.display = 'none';
+            document.getElementById('existingMediaLabel').style.display = 'none';
+        };
 
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entries, null, 2));
-            const downloadAnchor = document.createElement('a');
-            
-            const currentDate = new Date().toISOString().split('T')[0];
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `family_archive_backup_${currentDate}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-        }
+        document.getElementById('entryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
 
-        function triggerImport() {
-            document.getElementById('importFileInput').click();
-        }
+            const editId = document.getElementById('editEntryId').value;
+            const title = document.getElementById('title').value;
+            const category = document.getElementById('category').value;
+            const eventDate = document.getElementById('eventDate').value;
+            const fileInput = document.getElementById('mediaFileInput');
+            const locationName = document.getElementById('locationName').value.trim();
+            const description = document.getElementById('description').value;
 
-        function importBackup(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+            const saveToFirestore = async (newMedia) => {
+                const entryData = {
+                    child: currentChild,
+                    title,
+                    category,
+                    eventDate,
+                    locationName,
+                    description
+                };
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedEntries = JSON.parse(e.target.result);
-                    if (!Array.isArray(importedEntries)) {
-                        alert("Invalid backup file format.");
-                        return;
-                    }
-
-                    const overwrite = confirm("Click OK to MERGE imported data with existing entries, or CANCEL to replace all current entries.");
-                    
-                    if (overwrite) {
-                        const existingIds = new Set(entries.map(item => item.id));
-                        importedEntries.forEach(item => {
-                            if (!existingIds.has(item.id)) {
-                                entries.push(item);
-                            }
-                        });
-                    } else {
-                        entries = importedEntries;
-                    }
-
-                    localStorage.setItem('familyArchiveData', JSON.stringify(entries));
-                    renderTimeline();
-                    alert("Backup restored successfully!");
-                } catch (err) {
-                    alert("Error reading backup file. Make sure it is a valid JSON file.");
+                if (newMedia !== undefined) {
+                    entryData.media = newMedia;
                 }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
-        }
 
-        function editEntry(id) {
-            const item = entries.find(e => Number(e.id) === Number(id));
+                if (editId) {
+                    await updateDoc(doc(db, "entries", editId), entryData);
+                } else {
+                    entryData.media = newMedia || null;
+                    await addDoc(entriesCollection, entryData);
+                }
+                resetForm();
+            };
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    const isVideo = file.type.startsWith('video');
+                    await saveToFirestore({
+                        filePath: event.target.result,
+                        type: isVideo ? 'video' : 'image'
+                    });
+                };
+                reader.readAsDataURL(file);
+            } else {
+                await saveToFirestore(editId ? undefined : null);
+            }
+        });
+
+        window.editEntry = function(id) {
+            const item = entries.find(e => e.id === id);
             if (!item) return;
 
             document.getElementById('editEntryId').value = item.id;
@@ -553,95 +582,63 @@
 
             document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
             document.getElementById('title').focus();
-        }
+        };
 
-        function resetForm() {
-            document.getElementById('entryForm').reset();
-            document.getElementById('editEntryId').value = '';
-            document.getElementById('eventDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('form-heading').innerText = `Add Entry for ${currentChild}`;
-            document.getElementById('btnSubmit').innerText = 'Save Entry to Timeline';
-            document.getElementById('btnCancel').style.display = 'none';
-            document.getElementById('existingMediaLabel').style.display = 'none';
-        }
-
-        function saveEntry(e) {
-            e.preventDefault();
-
-            const editId = document.getElementById('editEntryId').value;
-            const title = document.getElementById('title').value;
-            const category = document.getElementById('category').value;
-            const eventDate = document.getElementById('eventDate').value;
-            const fileInput = document.getElementById('mediaFileInput');
-            const locationName = document.getElementById('locationName').value.trim();
-            const description = document.getElementById('description').value;
-
-            const processAndSave = (newMedia) => {
-                if (editId) {
-                    const index = entries.findIndex(item => Number(item.id) === Number(editId));
-                    if (index !== -1) {
-                        entries[index].title = title;
-                        entries[index].category = category;
-                        entries[index].eventDate = eventDate;
-                        entries[index].locationName = locationName;
-                        entries[index].description = description;
-
-                        if (newMedia !== undefined) {
-                            entries[index].media = newMedia;
-                        }
-                    }
-                } else {
-                    const newEntry = {
-                        id: Date.now(),
-                        child: currentChild,
-                        title,
-                        category,
-                        eventDate,
-                        locationName,
-                        description,
-                        media: newMedia || null
-                    };
-                    entries.push(newEntry);
-                }
-
-                localStorage.setItem('familyArchiveData', JSON.stringify(entries));
-                resetForm();
-                renderTimeline();
-            };
-
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const reader = new FileReader();
-
-                reader.onload = function(event) {
-                    const isVideo = file.type.startsWith('video');
-                    processAndSave({
-                        filePath: event.target.result,
-                        type: isVideo ? 'video' : 'image'
-                    });
-                };
-
-                reader.readAsDataURL(file);
-            } else {
-                processAndSave(editId ? undefined : null);
-            }
-        }
-
-        function deleteEntry(id) {
-            if (confirm("Are you sure you want to delete this record?")) {
-                entries = entries.filter(item => Number(item.id) !== Number(id));
-                localStorage.setItem('familyArchiveData', JSON.stringify(entries));
-                
-                if (Number(document.getElementById('editEntryId').value) === Number(id)) {
+        window.deleteEntry = async function(id) {
+            if (confirm("Are you sure you want to delete this record from the cloud?")) {
+                await deleteDoc(doc(db, "entries", id));
+                if (document.getElementById('editEntryId').value === id) {
                     resetForm();
                 }
-
-                renderTimeline();
             }
-        }
+        };
 
-        /* Lightbox Controls */
-        function openLightbox(mediaUrl, type) {
+        window.exportBackup = function() {
+            if (entries.length === 0) {
+                alert("No entries to export yet!");
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entries, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const currentDate = new Date().toISOString().split('T')[0];
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `family_archive_backup_${currentDate}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        };
+
+        window.triggerImport = function() {
+            document.getElementById('importFileInput').click();
+        };
+
+        window.importBackup = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importedEntries = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedEntries)) {
+                        alert("Invalid backup file format.");
+                        return;
+                    }
+
+                    for (const item of importedEntries) {
+                        delete item.id;
+                        await addDoc(entriesCollection, item);
+                    }
+                    alert("Backup imported to cloud successfully!");
+                } catch (err) {
+                    alert("Error reading backup file.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        };
+
+        window.openLightbox = function(mediaUrl, type) {
             const modal = document.getElementById('lightboxModal');
             const body = document.getElementById('lightboxBody');
 
@@ -650,29 +647,17 @@
             } else if (type === 'video') {
                 body.innerHTML = `<video src="${mediaUrl}" class="lightbox-content" controls autoplay></video>`;
             }
-
             modal.classList.add('active');
-        }
+        };
 
-        function closeLightbox(e) {
+        window.closeLightbox = function(e) {
             if (e.target.id === 'lightboxModal' || e.target.classList.contains('lightbox-close')) {
                 const modal = document.getElementById('lightboxModal');
                 const body = document.getElementById('lightboxBody');
-                
                 modal.classList.remove('active');
                 body.innerHTML = '';
             }
-        }
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                const modal = document.getElementById('lightboxModal');
-                if (modal.classList.contains('active')) {
-                    modal.classList.remove('active');
-                    document.getElementById('lightboxBody').innerHTML = '';
-                }
-            }
-        });
+        };
 
         function renderTimeline() {
             const container = document.getElementById('timelineContainer');
@@ -680,9 +665,7 @@
 
             document.getElementById('timeline-heading').innerText = `${currentChild}'s Timeline`;
 
-            const childEntries = entries
-                .filter(item => item.child === currentChild)
-                .sort((a, b) => new Date(b.eventDate) - new Date(a.eventDate));
+            const childEntries = entries.filter(item => item.child === currentChild);
 
             if (childEntries.length === 0) {
                 container.innerHTML = `<div class="empty-msg">No entries logged yet for ${currentChild}. Add one above!</div>`;
@@ -732,8 +715,8 @@
                         ${item.description ? `<p class="timeline-desc">${item.description}</p>` : ''}
                         ${mediaHTML}
                         <div class="timeline-actions">
-                            <button class="btn-action btn-edit" onclick="editEntry(${item.id})">✏️ Edit Entry</button>
-                            <button class="btn-action btn-delete" onclick="deleteEntry(${item.id})">🗑 Delete</button>
+                            <button class="btn-action btn-edit" onclick="editEntry('${item.id}')">✏️ Edit Entry</button>
+                            <button class="btn-action btn-delete" onclick="deleteEntry('${item.id}')">🗑 Delete</button>
                         </div>
                     </div>
                 `;
@@ -741,10 +724,6 @@
                 container.appendChild(itemEl);
             });
         }
-
-        window.onload = function() {
-            renderTimeline();
-        };
     </script>
 </body>
 </html>
